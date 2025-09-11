@@ -18,12 +18,23 @@ my_linear_model <- linear_reg() %>%
 #Use model to make predictions
 bike_predictions <- predict(my_linear_model,new_data=testData)
 
-
 kaggle_submission <- bike_predictions %>%
-bind_cols(., testData) %>% #Bind predictions with test data3
+  bind_cols(., testData) %>% #Bind predictions with test data3
   select(datetime, .pred) %>% #Just keep datetime and prediction variables4
   rename(count=.pred) %>% #rename pred to count (for submission to Kaggle)5
   mutate(count=pmax(0, count)) %>% #pointwise max of (0, prediction)6
-  mutate(datetime=as.character(format(datetime))) #needed
+  mutate(datetime=as.character(format(datetime)))
 
-vroom_write(x=kaggle_submission, file="./LinearPreds.csv",delim=",")
+#Could not get the format right until finally I asked Chatgpt and did the following:
+kaggle_submission$datetime <- as.POSIXct(
+  kaggle_submission$datetime,
+  format = "%m/%d/%Y %H:%M"
+)
+
+kaggle_submission$datetime <- format(
+  kaggle_submission$datetime,
+  "%Y-%m-%d %H:%M:%S"
+)
+
+# Save submission without quotes or row names
+write.csv(kaggle_submission, "LinearPreds.csv", row.names = FALSE, quote = FALSE)
