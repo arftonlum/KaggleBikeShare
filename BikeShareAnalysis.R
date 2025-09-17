@@ -2,6 +2,7 @@ library(tidyverse)
 library(tidymodels)
 library(vroom)
 library(glmnet)
+library(lmerTest)
 
 trainData <- vroom("train.csv")
 testData <- vroom("test.csv")
@@ -31,18 +32,52 @@ bike_recipe <- recipe(count ~ ., data = trainDatafortest) %>%
 #head(baked_train)
 
 ## Define linear regression model
-preg_model <- linear_reg(penalty = 0.02, mixture = 0.15) %>% #mixture(0,1) penalty > 0
+preg_model <- linear_reg(penalty = tune(), 
+                         mixture = tune()) %>% #mixture(0,1) penalty > 0
   set_engine("glmnet")
 
 ## Combine into workflow
 bike_workflow <- workflow() %>%
   add_recipe(bike_recipe) %>%
-  add_model(preg_model)%>%
-  fit(data= trainDatafortest)
+  add_model(preg_model)
+  #fit(data= trainDatafortest)
 
-## Fit model on training data
-#bike_fit <- fit(bike_workflow, data = trainDatafortest)
-bike_predictions <- predict(bike_workflow,new_data=testData)
+
+L <- 5
+K <-3
+#grid of values to tune over
+grid_of_tuning_params <- grid_regular(penalty(),
+                                      mixture(), 
+                                      levels = L)
+
+#split data for CV
+folds <- vfold_cv(trainDatafortest, v = K, repeats = 1)
+
+#run the CV
+CV_results <- bike_workflow %>%
+  tune_grid(resamples = folds,
+            grid = grid_of_tuning_params,
+            metrics = metric_set(rmse,mae))
+
+#plot results
+collect_metrics(CV_results)%>%
+  filter(.metric == "rmse")%>%
+  ggplot(data=., aes(x=penalty,y=mean,color=factor(mixture))) +
+  geom_line()
+
+#find best tuning parameter
+bestTune <- CV_results %>%
+  select_best(metric = "rmse")
+
+final_wf <-
+  bike_workflow%>%
+  finalize_workflow(bestTune)%>%
+  fit(data = trainDatafortest)
+
+bike_predictions <- final_wf%>%
+  predict(new_data=testData)
+
+#bike_predictions <- predict(bike_workflow,new_data=testData)
 
 #add something to un-log count before the submission
 
@@ -66,4 +101,4 @@ kaggle_submission$datetime <- format(
 )
 
 # Save submission without quotes or row names
-write.csv(kaggle_submission, "LinearPreds3.csv", row.names = FALSE, quote = FALSE)
+write.csv(kaggle_submission, "LinearPreds4.csv", row.names = FALSE, quote = FALSE)
