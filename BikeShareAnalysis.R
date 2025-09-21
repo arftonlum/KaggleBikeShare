@@ -32,23 +32,34 @@ bike_recipe <- recipe(count ~ ., data = trainDatafortest) %>%
 #head(baked_train)
 
 ## Define linear regression model
+#was code for penalized regression model
 preg_model <- linear_reg(penalty = tune(), 
                          mixture = tune()) %>% #mixture(0,1) penalty > 0
   set_engine("glmnet")
 
+#now with a regression tree
+my_mod <- decision_tree(tree_depth = tune(),
+                       cost_complexity = tune(),
+                       min_n=tune()) %>% #Type of model
+  set_engine("rpart") %>% # What R function to use
+  set_mode("regression")
+
 ## Combine into workflow
 bike_workflow <- workflow() %>%
   add_recipe(bike_recipe) %>%
-  add_model(preg_model)
+  add_model(my_mod)
   #fit(data= trainDatafortest)
 
 
 L <- 5
 K <-3
 #grid of values to tune over
-grid_of_tuning_params <- grid_regular(penalty(),
-                                      mixture(), 
-                                      levels = L)
+grid_of_tuning_params <- grid_regular(
+  tree_depth(),
+  cost_complexity(),
+  min_n(),
+  levels = L
+)
 
 #split data for CV
 folds <- vfold_cv(trainDatafortest, v = K, repeats = 1)
@@ -69,8 +80,7 @@ collect_metrics(CV_results)%>%
 bestTune <- CV_results %>%
   select_best(metric = "rmse")
 
-final_wf <-
-  bike_workflow%>%
+final_wf <-bike_workflow%>%
   finalize_workflow(bestTune)%>%
   fit(data = trainDatafortest)
 
@@ -101,4 +111,4 @@ kaggle_submission$datetime <- format(
 )
 
 # Save submission without quotes or row names
-write.csv(kaggle_submission, "LinearPreds4.csv", row.names = FALSE, quote = FALSE)
+write.csv(kaggle_submission, "LinearPreds5.csv", row.names = FALSE, quote = FALSE)
