@@ -3,6 +3,8 @@ library(tidymodels)
 library(vroom)
 library(glmnet)
 library(lmerTest)
+library(bonsai)
+library(lightgbm)
 
 trainData <- vroom("train.csv")
 testData <- vroom("test.csv")
@@ -38,26 +40,29 @@ preg_model <- linear_reg(penalty = tune(),
   set_engine("glmnet")
 
 #now with a regression tree
-my_mod <- decision_tree(tree_depth = tune(),
-                       cost_complexity = tune(),
-                       min_n=tune()) %>% #Type of model
-  set_engine("rpart") %>% # What R function to use
+#now it is a random forest
+#my_mod <- rand_forest(mtry = tune(),
+  #                    min_n=tune(),
+   #                   trees=500) %>%
+  #set_engine("ranger") %>%
+  #set_mode("regression")
+
+#bart model
+bart_model <- bart(trees = tune())%>%
+  set_engine("dbarts")%>%
   set_mode("regression")
 
 ## Combine into workflow
 bike_workflow <- workflow() %>%
   add_recipe(bike_recipe) %>%
-  add_model(my_mod)
+  add_model(bart_model)
   #fit(data= trainDatafortest)
 
-
+#code from board: mygrid <- grid_regular(mtry(ranger(1,maxNumXs)),)
 L <- 5
 K <-3
 #grid of values to tune over
-grid_of_tuning_params <- grid_regular(
-  tree_depth(),
-  cost_complexity(),
-  min_n(),
+grid_of_tuning_params <- grid_regular(trees(range = c(50,500)),
   levels = L
 )
 
@@ -111,4 +116,4 @@ kaggle_submission$datetime <- format(
 )
 
 # Save submission without quotes or row names
-write.csv(kaggle_submission, "LinearPreds5.csv", row.names = FALSE, quote = FALSE)
+write.csv(kaggle_submission, "LinearPreds7.csv", row.names = FALSE, quote = FALSE)
